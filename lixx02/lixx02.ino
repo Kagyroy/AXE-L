@@ -48,19 +48,19 @@ const int ledcBaseFrequency = 10000;
 
 //adc 
 const int VOLT = 3.3;
-const int ANALOG_MAX = 4096;
+const int ANALOG_MAX = 4095;  
+const int MAX_VALUE_DECIMAL_13BIT = 8191;
 
-  // ↑↑↑↑Decralations ende↑↑↑↑ //
+  // ↑↑↑↑Decralations end↑↑↑↑ //
 
   // ↓↓↓↓Functions↓↓↓↓ //
 
 // Arduino like analogWrite
 // value has to be between 0 and valueMax
-// 13bit max  => 8191 decimal
 void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 255)
 {
   // calculate duty, 8191 from 2 ^ 13 - 1
-  uint32_t duty = (8191 / valueMax) * min(value, valueMax);
+  uint32_t duty = (MAX_VALUE_DECIMAL_13BIT / valueMax) * min(value, valueMax);
   // write duty to LEDC
   ledcWrite(channel, duty);
 }
@@ -270,10 +270,9 @@ void loop()
   int analogValueR = analogRead(Pin_rightSensor); //adcから値を取得
   int valueL = analogValueL - sensorMinL; //（ほぼ）0からの値に補正
   int valueR = analogValueR - sensorMinR; //（ほぼ）0からの値に補正
+  
   if(valueL < 0) valueL = 0;
   if(valueR < 0) valueR = 0;
-//  if(valueL >= 1) valueL = 1;
-//  if(valueR >= 1) valueR = 1;
 
   Serial.print("leftSensor: ");
   Serial.println(analogValueL);
@@ -293,16 +292,15 @@ void loop()
   Serial.println(sensorRateR);
   Serial.println();
 
-
-//Line Trace Program start  //gain 2, dutyBase 170(160E),, gain 5(5.5), dutyBase 160(last cornar stop..)
-  const double pGain = 6;  //
+//Line Trace Program start  //gain 2, dutyBase 170(160E), gain 5(5.5), dutyBase 160(last cornar stop..)
+  const int dutyBase =16;  //定義するベース速度 
+  const double pGain = 6;  //比例ゲイン proportional gain
+  
   DRV8835 drv8835;
   int dutyL;
   int dutyR;
   int defL;
   int defR;
-
-  const int dutyBase =16;  //定義するベース速度
   
   defL =  (255 - dutyBase) * sensorRateL;  //255はconstで定数化 //duty最大値-dutyBase * sensorRate
   defR =  (255 - dutyBase) * sensorRateR;  //sensorRate(0~1)
