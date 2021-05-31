@@ -14,15 +14,19 @@ Tags
   const int DEBUG_MODE;
 #endif
 
-//arduino nano, esp32, microbit, rpi FLAG
+Course and Machine Specification
+  Course:
+  .Black line on White board
+  Machine:
+  .Two photoReflectors which get H level with black, get L leveValiables with white
  */
  
-  // ↓↓↓↓Declarations↓↓↓↓ //
+  // ↓↓↓↓Declaring Variables↓↓↓↓ //
   
 //Global variables
-  // flags
-  unsigned int flag_onBrake = 1;
-//Globaruvariables
+
+// flags
+unsigned int flag_onBrake = 1;
   
 // Pin config
 const int Pin_leftMotorIn1 =  32;
@@ -39,9 +43,10 @@ const int ledcCh_leftMotorIn2 = 1; //for lefttMotor  in2
 const int ledcCh_rightMotorIn1 = 2; //for rightMotor  in1
 const int ledcCh_rightMotorIn2 = 3; //for rightMotor  in2
 
-// ledc precission (1~16bit)
-const int ledcTimerBit = 13;
-//int ledcTimerBitDecimal; //後で考える
+// ledc precission (1~16bit configulable)
+const int ledcTimerBit            = 13;   //timer counter resolution for pwm (finxed for hardware reason)
+const int MAX_VALUE_DECIMAL_13BIT = 8191;
+const int ledcTimerBitDecimal = 255;      //本当は13bitをArduinoライクにするため関数内で8bitにしているので名前が適切でないかも
 
 // ledc base frequeny (1~80M?)
 const int ledcBaseFrequency = 10000;
@@ -49,14 +54,17 @@ const int ledcBaseFrequency = 10000;
 //adc 
 const int VOLT = 3.3;
 const int ANALOG_MAX = 4095;  
-const int MAX_VALUE_DECIMAL_13BIT = 8191;
 
-  // ↑↑↑↑Decralations end↑↑↑↑ //
 
-  // ↓↓↓↓Functions↓↓↓↓ //
+  // ↑↑↑↑Declaring Variables end↑↑↑↑ //
+
+  // ↓↓↓↓Defining Functions↓↓↓↓ //
 
 // Arduino like analogWrite
 // value has to be between 0 and valueMax
+
+  //esp32のpwmモジュールは13bitだが、ArduinoのAnalog Writeの書式に合わせて8bitの値を引数に入れる仕様にしている
+  //いっそのこと1~100にしても良い
 void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 255)
 {
   // calculate duty, 8191 from 2 ^ 13 - 1
@@ -65,7 +73,7 @@ void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 255)
   ledcWrite(channel, duty);
 }
 
-  // ↑↑↑↑Functions end↑↑↑↑ //
+  // ↑↑↑↑Defining Functions end↑↑↑↑ //
 
   // ↓↓↓↓Classes Definition↓↓↓↓ //
 
@@ -230,92 +238,89 @@ void setup()
   drv8835.brake();
   delay(testTime);
 
-  drv8835.forward((int)dutyL/2,(int)dutyR/2, flag_onBrake);
-  delay(testTime);
-  drv8835.brake();
-  delay(testTime);
-
-  drv8835.forward((int)dutyL,(int)dutyR/2, flag_onBrake);
-  delay(testTime);
-  drv8835.brake();
-  delay(testTime);
-
-  drv8835.forward((int)dutyL/2,(int)dutyR, flag_onBrake);
-  delay(testTime);
-  drv8835.brake();
-  delay(testTime); 
-
-  drv8835.forward((int)dutyL,0, flag_onBrake);
-  delay(testTime);
-  drv8835.brake();
-  delay(testTime);
-
-  drv8835.forward(0,(int)dutyR, flag_onBrake);
-  delay(testTime);
-  drv8835.brake();
-  delay(testTime);
 }
 
 void loop()
 {
-  const int sensorMinL = 630;   //
-  const int sensorMaxL = 3300;  //3150
-  const int sensorMinR = 2150;  //
-  const int sensorMaxR = 3950;  //3800
+  const int sensorMinL = 336;   //LeftMotor Minvalue
+  const int sensorMaxL = 3300;  //LeftMotor Maxvalue
+  const int sensorMinR = 1990;  //RightMotor MinValue
+  const int sensorMaxR = 3950;  //RightMotor Maxvalue
+  const int absoluteValueRangeL = sensorMaxL - sensorMinL; //Absolute sensorL valueRange
+  const int absoluteValueRangeR = sensorMaxR - sensorMinR; //Absolute sensorR valueRange
+  int     valueL = 0;
+  int     valueR = 0;
+  double  sensorRateL = 0;
+  double  sensorRateR = 0;
+  int     analogValueL = 0;
+  int     analogValueR = 0;
+  int absoluteValueL = 0;
+  int absoluteValueR = 0;
 
-  int sensorRangeL = sensorMaxL - sensorMinL;
-  int sensorRangeR = sensorMaxR - sensorMinR;
-  
-  int analogValueL = analogRead(Pin_leftSensor);  //adcから値を取得
-  int analogValueR = analogRead(Pin_rightSensor); //adcから値を取得
-  int valueL = analogValueL - sensorMinL; //（ほぼ）0からの値に補正
-  int valueR = analogValueR - sensorMinR; //（ほぼ）0からの値に補正
-  
-  if(valueL < 0) valueL = 0;
-  if(valueR < 0) valueR = 0;
+  analogValueL = analogRead(Pin_leftSensor);  //get sensorL value via ADC pin
+  analogValueR = analogRead(Pin_rightSensor); //get sensorR value via ADC pin
 
-  Serial.print("leftSensor: ");
+  absoluteValueL = analogValueL - sensorMinL; //calibrate sensorValue from 0 
+  absoluteValueR = analogValueR - sensorMinR; //calibrate sensorValue from 0
+  
+  if(absoluteValueL < 0) absoluteValueL = 0;  //Not to correct the sensor value less than 0
+  if(absoluteValueR < 0) absoluteValueR = 0;  //Not to correct the sensor value less than 0
+
+  Serial.print("SensorValue_L: ");
   Serial.println(analogValueL);
-  Serial.print("rightSensor: ");
+  Serial.print("SensorValue_R: ");
   Serial.println(analogValueR);
   Serial.println();
-
-  double sensorRateL = (double)valueL/(double)sensorRangeL;
-  double sensorRateR = (double)valueR/(double)sensorRangeR;
+  
+  sensorRateL = (double)absoluteValueL/(double)absoluteValueRangeL;  //Change the leftSensorValue into percentage
+  sensorRateR = (double)absoluteValueR/(double)absoluteValueRangeR;  //Change the rightSensorValue into percentage
+  
   if(sensorRateL > 1) sensorRateL = 1.0;
   if(sensorRateR > 1) sensorRateR = 1.0;
-
 
   Serial.print("sensorRateL: ");
   Serial.println(sensorRateL);
   Serial.print("sensorRateR: ");
   Serial.println(sensorRateR);
   Serial.println();
+  Serial.println();
 
 //Line Trace Program start  //gain 2, dutyBase 170(160E), gain 5(5.5), dutyBase 160(last cornar stop..)
-  const int dutyBase =16;  //定義するベース速度 
-  const double pGain = 6;  //比例ゲイン proportional gain
+  const int dutyBase =200;  //定義するベース速度 （値の範囲：0 ~ 255）
+  const double pGain = 1;  //比例ゲイン       （値の範囲：0.0 ~ 1.0）
   
-  DRV8835 drv8835;
-  int dutyL;
-  int dutyR;
-  int defL;
+  DRV8835 drv8835;  //MotorDriver instance化
+  int dutyL;  //LeftMotorDuty   (valueRange: xxx ~ xxx)
+  int dutyR;  //RightMotorDuty  (valueRange: xxx ~ xxx)
+  int defL;   //
   int defR;
-  
-  defL =  (255 - dutyBase) * sensorRateL;  //255はconstで定数化 //duty最大値-dutyBase * sensorRate
-  defR =  (255 - dutyBase) * sensorRateR;  //sensorRate(0~1)
 
+  //↓Cast必要
+/*
+  defL =  (ledcTimerBitDecimal - dutyBase) * sensorRateL;  //
+  defR =  (ledcTimerBitDecimal - dutyBase) * sensorRateR;  //sensorRate(0~1)
+*/
+
+  //コースとセンサのかかり方を図にして条件分岐をすべき。常に左右の値のdefを参照していたらおかしくなる。
+  defL =  dutyBase * sensorRateL;  //
+  defR =  dutyBase * sensorRateR;  //sensorRate(0~1)
+
+
+ //dutyLとdefRで左右互い違い
   dutyL = dutyBase + (defR * pGain);  //#imlat dutyLはクラスの中に入れたほうが良い
   dutyR = dutyBase + (defL * pGain);  //
-  if(dutyL > 255)
+  
+  if(dutyL > ledcTimerBitDecimal)               //計算結果が最大値を超えたら
   {
-    dutyR = dutyR-(dutyL-255);  //はみ出した値を逆のモータのバックとして引き継ぐ
-    dutyL = 255;
+    dutyR = dutyR-(dutyL-ledcTimerBitDecimal);  //はみ出した値を逆のモータのバックとして引き継ぐ
+    if(dutyR < 0) dutyR = 0;                    //0を下回ってしまったらマイナスにならないように0にする
+    dutyL = ledcTimerBitDecimal;
   }
-  if(dutyR > 255)
+  if(dutyR > ledcTimerBitDecimal)               //計算結果が最大値を超えたら
   {
-    dutyL = dutyL-(dutyR-255);
-    dutyR = 255; 
+    dutyL = dutyL-(dutyR-ledcTimerBitDecimal);  //はみ出した値を逆のモータのバックとして引き継ぐ
+    if(dutyL < 0) dutyL = 0;                    //0を下回ってしまったらマイナスにならないように0にする
+    dutyR = ledcTimerBitDecimal; 
   }
 
 //  dutyL = dutyBase - (defL * pGain);  //#imlat dutyLはクラスの中に入れたほうが良い
@@ -323,7 +328,9 @@ void loop()
 //  if(dutyL < 0) dutyL = 0;
 //  if(dutyR < 0) dutyR = 0; 
 
-  if(sensorRateL > 0.3 && sensorRateR > 0.3)
+
+//黒・黒でストレートだが、そこから外れ始めたタイミングを意図的に設定している　はず
+  if(sensorRateL > 0.3 && sensorRateR > 0.3)  //#imlat 0.3が何のマジックナンバーかわからない
   {
     drv8835.forward(dutyBase/2, dutyBase/2, flag_onBrake);  //#imlat 
   }
